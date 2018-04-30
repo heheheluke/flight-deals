@@ -1,0 +1,884 @@
+<html>
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.9.0/highlight.min.js"></script>
+        <script src="https://d3js.org/topojson.v2.min.js"></script>
+        <style>
+                body { 
+                    font-family: 'Alegreya Sans', Calibri, sans-serif;
+                    background-color: #f5f5dc;
+                    }
+
+                .bubbelechart{
+                    left: 0px; 
+                    top: 0px;
+                    border: #8b8378;
+                    }
+                
+                #third{
+                    border-color: #8b8378;
+                    border-width: 20;
+                    }
+         
+                line.actualValue { 
+                    stroke: #008837; 
+                    stroke-width: 4; 
+                    opacity: 0.3; 
+                    stroke-dasharray: 1 6; 
+                    stroke-linecap: round; 
+                    }
+                
+                line.meanValue { 
+                    stroke: #7b3294; 
+                    stroke-width: 4; 
+                    opacity: 0.3; 
+                    }
+
+                #p4 {
+                    position: absolute;
+                    left: 620px;
+                    top: 0px;
+                    border-color: #8b8378;
+                    border-width: 20;
+                    border: 20px solid black;
+                }
+
+                #bubblechart {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    border: 20px solid black;
+                }
+
+                #months {
+                    position: absolute;
+                    left: 0;
+                    top: 500px;
+                    border: 20px solid black;
+                }
+
+                #weekdays {
+                    position: absolute;
+                    left: 520px;
+                    top: 730px;
+                    border: 20px solid black;
+                }
+
+                svg {
+                    background-color: #f5f5dc;
+                }
+
+
+
+        </style>
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300" rel="stylesheet">
+<body>
+   <div class="map">
+        <svg height="710" width="1030" id="p4">
+        </svg>
+    <script>
+    /*
+    NOTE: USED some CLASS CODE and then modified. Credit to Professor Mimno for the map.
+    */
+    var svg = d3.select("#p4");
+    //Top Title
+    svg.append("text")
+        .text("What are the cheapest domestic routes?")
+        .attr("x", 500)
+        .attr("y", 40)
+        .attr("font-family", "Open Sans Condensed")
+        .attr("font-size", 40)
+        .attr("font-weight", "bold");
+
+    //Bottom Title
+    svg.append("text")
+        .text("(based on listings over four years)")
+        .attr("x", 650)
+        .attr("y", 70)
+        .attr("font-family", "Open Sans Condensed")
+        .attr("font-size", 20)
+        .attr("font-weight", "bold");
+            
+    var projection = d3.geoAlbersUsa().scale(75);
+    var pathGenerator = d3.geoPath().projection(projection);
+    var counties, states;
+    var usdaAtlas;
+    var parseRow = function(row) {
+        return row;
+    }
+    var data;
+    //colors for map
+    var divergingColors = ["#d8b365", "#f5f5f5", "#5ab4ac"];
+    var sequentialColors = ['#edf8fb','#b2e2e2','#66c2a4','#2ca25f','#006d2c'];
+
+    //Cordinates. Calculated in Excell
+    var interestingPoints = [[-122.1652, 45.5286306],[-122.42,37.45],null,
+    [-77.086224, 38.9362504],[-81.3124,29.9012],null,
+    [-77.086224, 38.9362504],[-90.0490,35.1495],null,
+    [-122.42,37.45], [-118.1743227,33.767],null,
+    [-96.7933061,32.7754117],[-97.7430608,30.267153],null,
+    [-77.4565388,38.9531162],[-83.0457538,42.331427],null,
+    [-74.0059728,40.7127753],[-71.0588801,42.3600825],null,
+    [-74.0059728,40.7127753],[-73.212072,44.4758825],null,
+    [-122.3789554,37.6213129],[-115.1398296,36.1699412],null,
+    [-122.3789554,37.6213129],[-121.4943996,38.5815719],null,
+    [-122.3789554,37.6213129],[-122.2711137,37.8043637],null,
+    [-77.0369,38.9072],[-71.0588801,42.3600825],null,
+    [-77.4565388,38.9531162],[-87.6297982,41.8781136],null,
+    [-80.1506022,26.0742344],[-82.4571776,27.950575],null,
+    [-75.2424229,39.8743959],[-80.1373174,26.1224386],null,
+    [-97.0403352,32.8998091],[-104.990251,39.7392358],null,
+    [-75.2424229,39.8743959],[-84.3879824,33.7489954],null,
+    [-75.2424229,39.8743959],[-81.3792365,28.5383355],null,
+    [-80.2870,25.7959],[-84.3879824,33.7489954],null,
+    [-118.1937,33.7701],[-115.1398296,36.1699412]]; 
+
+    //Method to add more points to calculate extra points to make curved lines. 
+    interestingPoints2 = changeList(interestingPoints);
+    //Scales for map
+    var populationScale = d3.scaleLinear().domain([-5, 0, 5]).range(divergingColors);
+    var percentScale = d3.scaleLinear().domain([0, 25, 50, 75, 100]).range(sequentialColors);
+    d3.queue()
+    .defer(d3.json, "us.json")
+    .await(callback);
+
+   function callback (error, rawMap, rawUSDA,data) {
+    usdaAtlas = d3.map(rawUSDA, function (d) {
+        // Set the ID to the result of this function. USED FROM CLASS
+        return Number(d.FIPS); // The Map file records FIPS codes as numbers, not strings.
+    });
+  counties = [];
+  states = topojson.feature(rawMap, rawMap.objects.states);
+  showMap(percentScale, "Ed5CollegePlusPct");
+}
+
+//Function to append airport Images
+function appendT(d){
+    for(i = 0; i < d.length; i++){
+        if(i% 4 ==1){
+            d3.select('svg')
+            .append('image')
+	        .attr("x", (projection(d[i])[0])-10)
+            .attr("y", (projection(d[i])[1])-10)
+            .attr("width", 25)
+            .attr("height", 25)
+            .attr("xlink:href", "test2.png");
+        }
+    }
+}
+
+//Function to change list so that we could have curve lines going betwean the cities
+function changeList(d){
+    var temp = [];
+    for(i = 0; i < d.length; i++){
+        if(i % 3 == 0){
+            temp.push(d[i]);
+            var xavg = ((d[i][0] + d[i+1][0])/2)*1.02;
+            var yavg = ((d[i][1] + d[i+1][1])/2);
+            temp.push([xavg,yavg]);
+        }
+        else{
+            temp.push(d[i]);
+        }
+    }
+    return temp;
+}
+
+//Append Map
+function showMap(scale, variable) {
+    var a = 0;
+    projection.fitExtent([[0,0], [svg.attr("width"), svg.attr("height")]], states);
+    pathGenerator = d3.geoPath().projection(projection);
+    var paths = svg.selectAll("path.states").data(states.features);
+    
+    //Draw State Outline.
+    paths = paths.enter().append("path").attr("class", "state")
+    .on("click", function (d) { console.log(d.id); })
+    .merge(paths);
+    paths
+    .transition().duration(1000)
+    .attr("stroke-opacity","0.1")
+    .attr("stroke","green")
+    .style("fill", function (state) {
+        var stateData = usdaAtlas.get(state.id);
+        if (stateData) {
+        return scale(stateData[variable]);
+        }
+    var circles = svg.selectAll("image")
+    .data(interestingPoints);
+    
+    //Draw airprots
+    circles.exit().remove();
+    circles = circles.enter().append("image")
+    .attr("width", 30)
+    .attr("height", 30)
+    .attr("xlink:href", "test.png")
+    .merge(circles);
+    
+    //Draw airports and change locations based on scale
+    circles
+    .attr("x", function (d) {
+        if(d !== null){
+        return (projection(d)[0]) - 10;
+        }
+        else{
+            return 10000;
+        }
+    })
+    .attr("y", function (d) {
+        if(d !== null){
+        return (projection(d)[1]) - 10;
+        }
+    });
+    })
+    .attr("d", function (county) {
+        return pathGenerator(county);
+    })
+    .attr("fill","vilot")
+    .append;
+
+    //Draw Lines on routes
+    var lineGenerator = d3.line().curve(d3.curveCardinal).defined(function(d) {
+            return d !== null;
+        })
+        .x(function(d, i) {
+            return projection(d)[0];
+        })
+        .y(function(d) {
+            return projection(d)[1];
+    });
+
+    //change lines atributes
+    var line = lineGenerator(interestingPoints2);
+    var x = "green"
+    d3.select('svg')
+        .append('path')
+        .attr('d', line)
+        .attr("stroke-width",4.7)
+        .attr("stroke-opacity",".9")
+        .attr('stroke',x)
+        .attr("fill","none");
+}
+        </script>
+</div>
+
+    <div class="chart">    
+        <svg height="550" width="1" id="bubblechart"></svg>
+        <script>
+
+            //radiusScale for the bubble chart        
+            var radiusScale = d3.scaleLinear()
+                                    .domain([271, 6226])
+                                    .range([4,92]);
+
+            //radiusScale for the legend of the bubble chart  
+            var radiusScaleForLegend = d3.scaleLinear()
+                                    .domain([271, 6226])
+                                    .range([2,40]); 
+
+            //radiusScale for the bubble chart  
+            var opacityScaleForBubbles = d3.scaleLinear()
+                                    .domain([0, 1350])
+                                    .range([0.05,1]);        
+
+            //array with will store records with carrier name and total number of deals they offered    
+            var nested_data_simpl=[];  
+
+            //compares airlines based on number of deals they've offered        
+            function compare(a, b) {
+                const A = a.numDeals;
+                const B = b.numDeals;
+
+                let comparison = 0;
+                if (A > B) {
+                    comparison = -1;
+                } else if (A < B) {
+                    comparison = 1;
+                }
+                return comparison;
+            }
+
+            //reads data from airlines.csv and uses the nest function to group columns       
+            d3.csv("airlines.csv", function(error,csv_data){
+            var nested_data = d3.nest()
+                .key(function(d)  { return d.airline; })
+                .entries(csv_data);
+                for (i=0; i<nested_data.length; i++){
+                    if (nested_data[i].key!="" && nested_data[i].values.length >200 ){
+                        nested_data_simpl.push({name: nested_data[i].key, numDeals:nested_data[i].values.length});
+                    }
+                }
+                //sort the data
+                nested_data_simpl=nested_data_simpl.sort(compare);
+               //only look at the top 13 carriers for the sake of an efficient bubble chart
+                nested_data_simpl= nested_data_simpl.slice(0,13);
+
+
+
+
+            d3.csv("airlines.csv", function(error,csv_data){
+            var nested_data2 = d3.nest()
+                .key(function(d)  { return d.DealsPerAirline; })
+                .entries(csv_data);
+
+
+
+            //array that will hold records of name and number of price wars that a carrier was involved in       
+            var belligerent_airlines=[];
+                var nested2=[];
+                //loops through all rows and checks how many carriers are offering the same deal at once for every deal and stores this information as records in an array, belligerent_airlines     
+                for (i=0; i<nested_data2.length; i++){
+                    for (j=0; j<nested_data2[i].values.length; j++){
+                    //six carriers are involved in price wars 
+                        if (nested_data2[i].values[j].carr1 != "" 
+                        && nested_data2[i].values[j].carr2 != "" 
+                        && nested_data2[i].values[j].carr3 != ""
+                        && nested_data2[i].values[j].carr4 != ""
+                        && nested_data2[i].values[j].carr5 != ""
+                        && nested_data2[i].values[j].carr6 != ""){
+                            nested2.push({obj:nested_data2[i].values[j]});
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr1, numPriceWars: nested_data2[i].key });   
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr2, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr3, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr4, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr5, numPriceWars: nested_data2[i].key });                     belligerent_airlines.push({name:nested_data2[i].values[j].carr6, numPriceWars: nested_data2[i].key }); 
+
+                        }
+                        //five carriers are involved in price wars 
+                        else if (nested_data2[i].values[j].carr1 != "" 
+                        && nested_data2[i].values[j].carr2 != "" 
+                        && nested_data2[i].values[j].carr3 != ""
+                        && nested_data2[i].values[j].carr4 != ""
+                        && nested_data2[i].values[j].carr5 != ""){
+                            nested2.push({obj:nested_data2[i].values[j]});
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr1, numPriceWars: nested_data2[i].key });   
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr2, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr3, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr4, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr5, numPriceWars: nested_data2[i].key }); 
+                        }
+                        //four carriers are involved in price wars 
+                        else if (nested_data2[i].values[j].carr1 != "" 
+                        && nested_data2[i].values[j].carr2 != "" 
+                        && nested_data2[i].values[j].carr3 != ""
+                        && nested_data2[i].values[j].carr4 != ""){
+                            nested2.push({obj:nested_data2[i].values[j]});
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr1, numPriceWars: nested_data2[i].key });   
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr2, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr3, numPriceWars: nested_data2[i].key }); 
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr4, numPriceWars: nested_data2[i].key }); 
+                        }
+                        //three carriers are involved in price wars 
+                        else if (nested_data2[i].values[j].carr1 != "" 
+                            && nested_data2[i].values[j].carr2 != "" 
+                            && nested_data2[i].values[j].carr3 != ""){
+                                nested2.push({obj:nested_data2[i].values[j]});
+                                belligerent_airlines.push({name:nested_data2[i].values[j].carr1, numPriceWars: nested_data2[i].key });   
+                                belligerent_airlines.push({name:nested_data2[i].values[j].carr2, numPriceWars: nested_data2[i].key }); 
+                                belligerent_airlines.push({name:nested_data2[i].values[j].carr3, numPriceWars: nested_data2[i].key }); 
+                        }
+                        //two carriers are involved in price wars 
+                        else if (nested_data2[i].values[j].carr1 != "" && nested_data2[i].values[j].carr2 != ""){
+                            nested2.push({obj:nested_data2[i].values[j]});
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr1, numPriceWars: nested_data2[i].key });   
+                            belligerent_airlines.push({name:nested_data2[i].values[j].carr2, numPriceWars: nested_data2[i].key }); 
+                        }
+                        //only 1 carrier with the deal, thus no price wars     
+                 }
+            }
+
+
+
+
+            //refernce: https://stackoverflow.com/questions/38294781/how-to-merge-duplicates-in-an-array-of-objects-and-sum-a-specific-property
+            var result = [];
+
+            belligerent_airlines.forEach(function (a) {
+                if (!this[a.name]) {
+                    this[a.name] = { name: a.name, numPriceWars: 0 };
+                    result.push(this[a.name]);
+                }
+                this[a.name].numPriceWars =parseInt(this[a.name].numPriceWars) +  parseInt(a.numPriceWars);
+            }, Object.create(null));
+
+
+            //compares airlines based on number of price wars they've been involved in              
+            function compare2(a, b) {
+                const A = a.numPriceWars;
+                const B = b.numPriceWars;
+
+                let comparison = 0;
+                if (A > B) {
+                    comparison = -1;
+                } else if (A < B) {
+                    comparison = 1;
+                }
+                return comparison;
+            }
+
+            //sort the carriers by number of price wars they are involved in       
+            result=result.sort(compare2);
+            //use the top 13 carriers for the bubble chart       
+            result=result.slice(0,13);
+
+
+
+
+            var deal_prices=[]       
+            d3.csv("airlines.csv", function(error,csv_data){       
+            var total_price_of_deals = d3.nest()
+                .key(function(d) { return d.airline; })
+                .entries(csv_data);
+            for (i=0; i<total_price_of_deals.length; i++){
+                for  (j=0; j<total_price_of_deals[i].values.length; j++){
+                    if (total_price_of_deals[i].key!=""){
+                        var priceAir =  (nested_data[i].values[j].price);
+                        var priceAir2 = priceAir.replace(/\,/g,'');
+                        var priceAir3= priceAir2.replace(/\$/g,'');
+                        var priceAir4= priceAir3.replace(/\./g,'');
+                        var priceAir5= priceAir4.replace(/\ /g,'');
+                        // https://stackoverflow.com/questions/5515310/is-there-a-standard-function-to-check-for-null-undefined-or-blank-variables-in
+                        //if the priceAir5 variable is unreadable, treat it as a price of 0 b/c the cell is empty 
+                        if (priceAir5 === undefined || priceAir5 == null || priceAir5.length <= 0){
+                            priceAir5=0;
+                        }
+                        deal_prices.push({name: nested_data[i].key, price:priceAir5});
+                     }
+                 }
+            }
+
+
+            //refernce: https://stackoverflow.com/questions/38294781/how-to-merge-duplicates-in-an-array-of-objects-and-sum-a-specific-property
+            //Merge duplicates(records with the same name) in an array of records with names and number of deals attributes       
+            var deal_prices_result = [];
+
+            //add up all the prices of deals for each carrier to get an array with all carrier names and the total prices of all deals       
+            deal_prices.forEach(function (a) {
+                if (!this[a.name]) {
+                    this[a.name] = { name: a.name, price: a.price };
+                    deal_prices_result.push(this[a.name]);
+                }
+                this[a.name].price =parseInt(this[a.name].price) +  parseInt(a.price);
+            }, Object.create(null));
+
+
+
+            //https://stackoverflow.com/questions/47749932/merge-multiple-json-with-the-same-id
+            var joined_arrays1 = nested_data_simpl.map(a => Object.assign(a, result.find(b => b.name == a.name)));
+            var joined_arrays2 = joined_arrays1.map(a => Object.assign(a, deal_prices_result.find(b => b.name == a.name)));
+
+
+            })
+
+
+            var bubble = d3.pack(carrierData)
+                        .size([500, 500])
+                        .padding(1);
+
+
+
+            var svgbubble = d3.select("#bubblechart")
+                // .append("svg")
+                .attr("width", 600)
+                .attr("height", 500)
+                .attr("class", "bubble");
+
+            // add title        
+            svgbubble.append("text")
+                  .attr("class", "title")
+                  .attr("x", 420)
+                  .attr("y", 40)
+                  .text("Which airline is")
+                  .attr("font-family", "Open Sans Condensed")
+                  .attr("font-size", 30)
+                  .attr("font-weight", "bold");       
+
+            // add title     
+            svgbubble.append("text")
+                  .attr("class", "title")
+                  .attr("x", 420)
+                  .attr("y", 74)
+                  .text("the cheapest?")
+                  .attr("font-family", "Open Sans Condensed")
+                  .attr("font-size", 30)
+                  .attr("font-weight", "bold");    
+                
+            //Addendum
+            svgbubble.append("text")
+                .text("(based on total number of listings")
+                .attr("x", 420)
+                .attr("y", 100)
+                .attr("font-family", "Open Sans Condensed")
+                .attr("font-size", textFontSize);
+
+            svgbubble.append("text")
+                .text("over four years)")
+                .attr("x", 450)
+                .attr("y", 116)
+                .attr("font-family", "Open Sans Condensed")
+                .attr("font-size", textFontSize);    
+
+            var carrierData= {
+                    "children":[{"name":"American","numDeals":6226,"numPriceWars":1350,"price":2187646},{"name":"United","numDeals":6151,"numPriceWars":1224,"price":2925753},{"name":"Delta","numDeals":4847,"numPriceWars":904,"price":2452954},{"name":"jetBlue","numDeals":1211,"numPriceWars":521,"price":232956},{"name":"Air Canada","numDeals":661,"numPriceWars":65,"price":364394},{"name":"US Airways","numDeals":585,"numPriceWars":317,"price":150488},{"name":"KLM Royal Dutch","numDeals":461,"numPriceWars":152,"price":334774},{"name":"Emirates","numDeals":398,"numPriceWars":0,"price":284748},{"name":"Copa","numDeals":381,"numPriceWars":0,"price":159069},{"name":"British Airways","numDeals":376,"numPriceWars":115,"price":273681},{"name":"Aeromexico","numDeals":365,"numPriceWars":0,"price":123460},{"name":"Alaska","numDeals":308,"numPriceWars":120,"price":79641},{"name":"Qatar Airways","numDeals":271,"numPriceWars":0,"price":203247}]};
+
+      
+
+            //reference: https://stackoverflow.com/questions/46781240/bubble-chart-clustering-layout       
+             var nodes = d3.hierarchy(carrierData)
+                        .sum(function(d) { return d.numDeals; });
+
+            //I used this page as inspiration when creating my bubble chart: https://jsfiddle.net/Vinill/r24e8xd7/54/# 
+            var node = svgbubble.selectAll(".node")
+                .data(bubble(nodes).descendants())
+                .enter()
+                .filter(function(d){
+                    return  !d.children
+                })
+                .append("g")
+                .attr("class", "node")
+                .attr("transform", function(d) {
+                    return "translate(" + d.x + "," + d.y + ")";
+                });
+
+            node.append("title")
+                .text(function(d) {
+                    return d.name + ": " + d.numDeals;
+                })
+                .attr("font-family", "Open Sans Condensed");
+
+            //draw the circles to represent bubbles      
+            node.append("circle")
+                .attr("r", function(d) {
+                    //make radius proportional to number of deals 
+                    return radiusScale(d.data.numDeals);
+                })
+                .style("opacity", function(d) {
+                    //make opacity proportional to number of price wars the airline was involved in
+                    return opacityScaleForBubbles(d.data.numPriceWars);
+                })
+                .style("stroke", "black")
+                .style("fill", "green")
+                .style("stroke-width", 3);
+
+            //font size based on number of deals ~ aka radius   
+            node.append("text")
+                .style("text-anchor", "middle")
+                .style("font-size", function(d) {
+                if(d.data.numDeals < 500) {
+                    return "10";
+                }
+                else if(d.data.numDeals > 500 && d.data.numDeals < 2500)  {
+                    return "12";
+                }
+                else{
+                    return "16";
+                }
+
+            })
+                .style("font-weight", "bold")
+                .attr("dy", ".10em")
+
+                //add text to each bubble to show the name of carrier and average price of deals they've given
+                .text(function(d) {
+                    return d.data.name.substring(0, d.data.numDeals / 6) + ": $" + (d.data.price/d.data.numDeals).toFixed(0);
+                })
+                .text(function(d) {
+                    return d.data.name.substring(0, d.data.numDeals / 6) + ": $" + (d.data.price/d.data.numDeals).toFixed(0);
+                })
+                .attr("font-family", "Open Sans Condensed");
+
+
+            d3.select(self.frameElement)
+                .style("height", 500 + "px")
+                .style("height", 500 + "px");
+
+
+            var borderPath = svgbubble.append("rect")
+                .attr("x", 400)
+                .attr("y", 380)
+                .attr("height", 90)
+                .attr("width", 195)
+                .style("stroke", "black")
+                .style("fill", "none")
+                .style("stroke-width", 1);
+
+
+            svgbubble.append("text")
+                .attr("class", "title")
+                .attr("x", 410)
+                .attr("y", 395)
+                .style("font-weight", "bold")
+                .style("font-size", 8)
+                .text("Opacity Scale Legend for Number of Price Wars");       
+
+
+            svgbubble.append("circle")           
+                .attr("cx", 435)
+                .attr("cy", 420)
+                .attr("r", 15)
+                .attr("opacity", 0.05)
+                .style("stroke", "black")
+                .style("fill", "green")
+                .style("stroke-width", 2);
+
+            svgbubble.append("text")
+                .attr("x", 430)
+                .attr("y", 455)
+                .text("0");           
+
+            svgbubble.append("circle")           
+                .attr("cx", 490)
+                .attr("cy", 420)
+                .attr("r", 15)
+                .attr("opacity", 0.525)
+                .style("stroke", "black")
+                .style("fill", "green")
+                .style("stroke-width", 2);
+
+            svgbubble.append("text")
+                .attr("x", 480)
+                .attr("y", 455)
+                .text("675");           
+
+            svgbubble.append("circle")           
+                .attr("cx", 555)
+                .attr("cy", 420)
+                .attr("r", 15)
+                .attr("opacity", 1)
+                .style("stroke", "black")
+                .style("fill", "green")
+                .style("stroke-width", 2);       
+
+            svgbubble.append("text")
+                .attr("x", 540)
+                .attr("y", 455)
+                .text("1350");           
+                })});
+
+        </script>    
+    </div>
+    
+    
+    
+
+    <div id = "first">
+        <script>
+
+            d3.select("#first").append("svg")
+            .attr("id", "weekdays")
+            .attr("height", 170)
+            .attr("width", 1130);
+            
+            //Initialize
+            var dealData;
+            var svgperday = d3.select("#weekdays");
+
+            //Create the color gradient scale
+            var colors = ["red", "green"];
+            var colorScale = d3.scaleLinear().domain([3000, 4700]).range(colors);
+            var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            var opacityScale = d3.scaleLinear().domain([3000, 4700]).range([0.2, .9]);
+            
+            //Comparator helper function for sorting the data for drawing the chart later
+            function comparator(a, b) {
+                if(a.DealsPerDay < b.DealsPerDay) {
+                    return 1;
+                }
+                if(a.DealsPerDay > b.DealsPerDay) {
+                    return -1;
+                }
+                return 0;
+            }
+
+            //Parse the information
+            d3.csv("deals_per_day_of_week.csv", function (theData) {
+                
+                //Convert these fields to numbers
+                theData.forEach(function (d) {
+                    d.DayOfWeek = +d.DayOfWeek;
+                    d.DealsPerDay = +d.DealsPerDay;
+                });
+                var data = theData;
+                dealData = data;
+                
+                //Sort the data
+                //data.sort(comparator);
+
+                //Scale for the width of the bar
+                widthScale = d3.scaleLinear().domain([3000, 4700]).range([40, 220]);
+                
+                //Draw literally everything
+                var temp = 130;
+                for(i = 0; i < data.length; i++) {
+                    svgperday.append("rect")
+                    .attr("x", temp)
+                    .attr("y", 60)
+                    .attr("width", widthScale(data[i].DealsPerDay))
+                    .attr("height", 55)
+                    .attr("fill", "	#006400")
+                    .attr("fill-opacity", opacityScale(data[i].DealsPerDay))
+                    .attr("stroke", "white");
+                    
+                    //Day label
+                    var offset = [20, 25, 25, 35, 25, 17, 25]; //How many pixels left to offset each day's corresponding text label
+
+                    svgperday.append("text")
+                    .text(days[i])
+                    .attr("x", (temp+temp+widthScale(data[i].DealsPerDay))/2 - offset[i]) //Get the average to put the text in the middle
+                    .attr("y", 130)
+                    .attr("font-family", "Open Sans Condensed")
+                    .attr("font-size", 18)
+                    .attr("font-weight", "bold");
+                    
+                    //Value label
+                    svgperday.append("text")
+                    .text(data[i].DealsPerDay.toString())
+                    .attr("x", (temp+temp+widthScale(data[i].DealsPerDay)-25)/2)
+                    .attr("y", 90)
+                    .attr("font-family", "Open Sans Condensed")
+                    .attr("font-size", 16)
+                    .attr("font-weight", function() { if(i == 3) {return "bold"; }});
+
+                    temp = temp + widthScale(data[i].DealsPerDay);
+                    
+                    //Title
+                    svgperday.append("text")
+                    .text("Which day of the week has the most flight deals?")
+                    .attr("x", 420)
+                    .attr("y", 40)
+                    .attr("font-family", "Open Sans Condensed")
+                    .attr("font-size", 28);
+
+                    //Addendum
+                    svgperday.append("text")
+                    .text("(based on total number of listings over four years)")
+                    .attr("x", 905)
+                    .attr("y", 164)
+                    .attr("font-family", "Open Sans Condensed")
+                    .attr("font-size", 12);                    
+
+                }
+
+                });
+        </script>
+    </div>   
+      
+    <div id = "third">
+        <script>
+            var width = 600;
+            var height = 400;
+            var dimension = 35; //Length of the rectangle
+            var rectWidth = 13; //Width of the rectangles
+            var innerRadius = 10;   //Radius of the inner "circle"
+            var textDistance = 10;  //Distance of the text label from the rectangle
+            var textFontSize = 13; //Size of the font labelling the rectangles; all text font size is relative to this
+
+            d3.select("#third").append("svg")
+            .attr("id", "months")
+            .attr("height", height)
+            .attr("width", width);
+            
+            var perMonthData;
+            var perMonthSVG = d3.select("#months");
+            
+            d3.csv("deals_per_month.csv", function(data) {
+
+                //Convert these fields to numbers
+                data.forEach(function (d) {
+                    d.DayOfMonth = +d.DayOfMonth;
+                    d.DealsPerDay = +d.DealsPerDay;
+                });
+                perMonthData = data;
+                
+                //Scaling function for how long the rectangle will be
+                var lengthScale = d3.scaleLinear().domain([1900, 2900]).range([2.5, 5]);
+
+                var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
+                
+                //Title
+                perMonthSVG.append("text")
+                .text("Which month has")
+                .attr("x", width*(.7))
+                .attr("y", height*(.1))
+                .attr("font-family", "Open Sans Condensed")
+                .attr("font-size", textFontSize*2)
+                .attr("font-weight", "bold");
+
+                perMonthSVG.append("text")
+                .text("the most flight deals?")
+                .attr("x", width*(.68))
+                .attr("y", height*(.18))
+                .attr("font-family", "Open Sans Condensed")
+                .attr("font-size", textFontSize*2)
+                .attr("font-weight", "bold");
+                
+                //Addendum
+                perMonthSVG.append("text")
+                .text("(based on total number of listings")
+                .attr("x", width*(.7))
+                .attr("y", height*(.24))
+                .attr("font-family", "Open Sans Condensed")
+                .attr("font-size", textFontSize);
+
+                perMonthSVG.append("text")
+                .text("over four years)")
+                .attr("x", width*(.75))
+                .attr("y", height*(.28))
+                .attr("font-family", "Open Sans Condensed")
+                .attr("font-size", textFontSize);
+
+                //Draw the circles (grey and faded)
+                for(x = 0; x < 5; x++) {
+                    console.log("running2");
+                    perMonthSVG.append("circle")
+                    .attr("cx", width/2.5)
+                    .attr("cy", height/2)
+                    .attr("r", dimension*x)
+                    .attr("stroke", "grey")
+                    .attr("stroke-width", 2)
+                    .attr("fill", "none")
+                    .attr("stroke-opacity", 0.2);
+                }
+                
+                //Add to x,y coordinate offsets to adjust the text position a bit (due to some small calculation errors) added in
+                var xOffset = [-20, 5, 0, 0, -10, -30, -15, -20, -55, -43, -50, -10];
+                var yOffset = [0, -5, 0, 5, 10, 10, 10, 10, -2, 5, 3, 0];
+
+                var topPoints = [7, 6, 10, 5, 11, 9]; //The top 6 months for deals, descending order
+                var rankingColorScale = d3.scaleLinear().domain([0, 6]).range(["#006400", "#B8B8B8"]); //Color scale; dark green to light gray
+
+                //Draw the bars and text labels
+                for(i = 0; i < data.length; i++) {
+                    perMonthSVG.append("rect")
+                    .attr("x", (width/2.5 - rectWidth/2))
+                    .attr("y", (height/2)-dimension*(lengthScale(data[i].DealsPerMonth))-innerRadius)
+                    .attr("width", rectWidth)
+                    .attr("height", dimension*(lengthScale(data[i].DealsPerMonth)))
+                    .attr("transform", "rotate (" + (30*i).toString()+ "," + (width/2.5).toString() + ", " + (height/2).toString() + ")")
+                    .attr("fill", function() {                 //Highlight the bars for the best months
+                        if(topPoints.indexOf(i) > -1) {
+                            return rankingColorScale(topPoints.indexOf(i));
+                        }
+                        else {
+                            return "#B8B8B8";
+                        }
+                    });
+                    
+                    //Draw the text
+                    perMonthSVG.append("text")
+                    .text(monthNames[i] + ": " + data[i].DealsPerMonth)
+                    .attr("x", (dimension*(lengthScale(data[i].DealsPerMonth))+innerRadius+textDistance)*Math.cos((-90+(i*30))*Math.PI/180) + (width/2.5) + xOffset[i])
+                    .attr("y", (dimension*(lengthScale(data[i].DealsPerMonth))+innerRadius+textDistance)*Math.sin((-90+(i*30))*Math.PI/180) + (height/2) + yOffset[i])
+                    .attr("id", "text" + i.toString())
+                    .attr("font-family", "Open Sans Condensed")
+                    .attr("font-size", textFontSize*1.3)
+                    .attr("font-weight", function() {
+                        if(i == 6 || i == 7 || i == 10) {
+                            return "bold";
+                        }
+                    });
+                }
+            });            
+        </script>
+    </div>    
+</body>
+</html>
